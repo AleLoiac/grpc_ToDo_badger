@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package todo;
+option go_package="/todopb";
+
+message NewToDo {
+  string title = 1;
+  string description = 2;
+}
+
+message ToDo {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  bool done = 4;
+}
+
+message ToDoResponse {
+  ToDo todo = 1;
+}
+
+message empty {}
+
+message ToDoId {
+  string id = 1;
+}
+
+service ToDoService {
+  rpc CreateToDo (NewToDo) returns (ToDoResponse);
+  rpc ListToDos (empty) returns (stream ToDoResponse);
+  rpc CheckUncheck (ToDoId) returns (ToDoResponse);
+  rpc DeleteToDo (ToDoId) returns (empty);
+}
