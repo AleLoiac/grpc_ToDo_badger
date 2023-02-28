@@ -56,51 +56,75 @@ func (*server) CreateToDo(ctx context.Context, req *todopb.NewToDo) (*todopb.ToD
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	gettodo := &todopb.ToDo{}
+	//gettodo := &todopb.ToDo{}
 
-	// delete and create new project
-	err2 := db.View(func(txn *badger.Txn) error {
-		data, err3 := txn.Get([]byte(id))
-		data.Value(func(val []byte) error {
-			err = proto.Unmarshal(val, gettodo)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
-		//need to transform data in bytes
-		fmt.Println(gettodo)
-		return err3
-	})
-	if err2 != nil {
-		return nil, status.Error(codes.Internal, err2.Error())
-	}
+	//retrieve a single todo
+	//err2 := db.View(func(txn *badger.Txn) error {
+	//	data, err3 := txn.Get([]byte(id))
+	//	data.Value(func(val []byte) error {
+	//		err = proto.Unmarshal(val, gettodo)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		return nil
+	//	})
+	//	//need to transform data in bytes
+	//	fmt.Println(gettodo)
+	//	return err3
+	//})
+	//if err2 != nil {
+	//	return nil, status.Error(codes.Internal, err2.Error())
+	//}
 
-	todoList = append(todoList, newTodo)
+	//todoList = append(todoList, newTodo)
+	//fmt.Println(todoList)
 
-	fmt.Println(todoList)
 	return res, nil
 }
 
 func (*server) ListToDos(req *todopb.Empty, stream todopb.ToDoService_ListToDosServer) error {
 	fmt.Println("ListToDos function is invoked with an empty request")
 
-	for i := range todoList {
-		res := &todopb.ToDoResponse{
-			Todo: &todopb.ToDo{
-				Id:          todoList[i].GetId(),
-				Title:       todoList[i].GetTitle(),
-				Description: todoList[i].GetDescription(),
-				Done:        todoList[i].GetDone(),
-			},
+	restodo := &todopb.ToDo{}
+
+	err := db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 10
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			data := it.Item()
+			err := data.Value(func(v []byte) error {
+				err := proto.Unmarshal(v, restodo)
+				res := &todopb.ToDoResponse{
+					Todo: &todopb.ToDo{
+						Id:          restodo.GetId(),
+						Title:       restodo.GetTitle(),
+						Description: restodo.GetDescription(),
+						Done:        restodo.GetDone(),
+					},
+				}
+				err = stream.Send(res)
+				if err != nil {
+					return err
+				}
+				time.Sleep(500 * time.Millisecond)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
 		}
-		err := stream.Send(res)
-		if err != nil {
-			return err
-		}
-		time.Sleep(500 * time.Millisecond)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	return nil
+
 }
 
 func (*server) CheckUncheck(ctx context.Context, req *todopb.ToDoId) (*todopb.ToDoResponse, error) {
@@ -148,7 +172,7 @@ func main() {
 
 	defer db.Close()
 
-	todoList = make([]*todopb.ToDo, 0)
+	//todoList = make([]*todopb.ToDo, 0)
 
 	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
