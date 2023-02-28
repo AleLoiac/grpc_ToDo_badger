@@ -168,7 +168,7 @@ var db *badger.DB
 func main() {
 	fmt.Println("Server started...")
 
-	db, _ = badger.Open(badger.DefaultOptions("/tmp/badger"))
+	db, _ = badger.Open(badger.DefaultOptions("/Users/aless/Desktop/Go/grpc_ToDo_badger/db"))
 
 	defer db.Close()
 
