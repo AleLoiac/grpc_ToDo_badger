@@ -102,47 +102,39 @@ func (*server) CheckUncheck(ctx context.Context, req *todopb.ToDoId) (*todopb.To
 	fmt.Printf("CheckUncheck function is invoked with %v\n", req)
 	id := req.GetId()
 
-	controlTodo := &todopb.ToDo{}
-	resTodo := &todopb.ToDo{}
-
+	var resTodo *todopb.ToDoResponse
 	err := db.Update(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchSize = 10
-		it := txn.NewIterator(opts)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			data := it.Item()
-			err := data.Value(func(v []byte) error {
-				err := proto.Unmarshal(v, controlTodo)
-				if err != nil {
-					return err
-				}
-				if controlTodo.GetId() == id {
-					resTodo = &todopb.ToDo{
-						Id:          controlTodo.GetId(),
-						Title:       controlTodo.GetTitle(),
-						Description: controlTodo.GetDescription(),
-						Done:        !controlTodo.GetDone(),
-					}
-					return nil
-				}
-				return nil
-			})
+		item, err := txn.Get([]byte(id))
+		if err != nil {
+			return status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", id))
+		}
+
+		var controlTodo todopb.ToDo
+		err = item.Value(func(val []byte) error {
+			err = proto.Unmarshal(val, &controlTodo)
 			if err != nil {
 				return err
 			}
+			controlTodo.Done = !controlTodo.Done
+			resTodo = &todopb.ToDoResponse{Todo: &controlTodo}
+			newVal, err := proto.Marshal(&controlTodo)
+			if err != nil {
+				return err
+			}
+			return txn.SetEntry(&badger.Entry{
+				Key:   []byte(id),
+				Value: newVal,
+			})
+		})
+		if err != nil {
+			return err
 		}
-		return status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", req.GetId()))
+		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
-	res := &todopb.ToDoResponse{
-		Todo: resTodo,
-	}
-	return res, nil
+	return resTodo, nil
 }
 
 func (*server) DeleteToDo(ctx context.Context, req *todopb.ToDoId) (*todopb.Empty, error) {
