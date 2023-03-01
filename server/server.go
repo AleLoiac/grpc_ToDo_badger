@@ -20,8 +20,6 @@ type server struct {
 	todopb.ToDoServiceServer
 }
 
-var todoList []*todopb.ToDo
-
 var serial int
 
 func (*server) CreateToDo(ctx context.Context, req *todopb.NewToDo) (*todopb.ToDoResponse, error) {
@@ -141,15 +139,18 @@ func (*server) DeleteToDo(ctx context.Context, req *todopb.ToDoId) (*todopb.Empt
 	fmt.Printf("DeleteToDo function is invoked with %v\n", req)
 	id := req.GetId()
 
-	for i := range todoList {
-		if id == todoList[i].GetId() {
-			todoList = append(todoList[:i], todoList[i+1:]...)
-			res := &todopb.Empty{}
-			fmt.Println("Todo deleted")
-			return res, nil
+	err := db.Update(func(txn *badger.Txn) error {
+		err := txn.Delete([]byte(id))
+		if err != nil {
+			return status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", id))
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return nil, status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", req.GetId()))
+	return &todopb.Empty{}, nil
+
 }
 
 var db *badger.DB
@@ -160,8 +161,6 @@ func main() {
 	db, _ = badger.Open(badger.DefaultOptions("/Users/aless/Desktop/Go/grpc_ToDo_badger/db"))
 
 	defer db.Close()
-
-	//todoList = make([]*todopb.ToDo, 0)
 
 	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
