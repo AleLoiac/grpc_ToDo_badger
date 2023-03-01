@@ -29,7 +29,6 @@ func (*server) CreateToDo(ctx context.Context, req *todopb.NewToDo) (*todopb.ToD
 	id := strconv.Itoa(serial)
 	title := req.GetTitle()
 	description := req.GetDescription()
-	done := false
 
 	serial++
 
@@ -37,10 +36,9 @@ func (*server) CreateToDo(ctx context.Context, req *todopb.NewToDo) (*todopb.ToD
 		Id:          id,
 		Title:       title,
 		Description: description,
-		Done:        done,
+		Done:        false,
 	}
 
-	//sending a response, look at the structure in the generated code
 	res := &todopb.ToDoResponse{
 		Todo: newTodo,
 	}
@@ -55,37 +53,13 @@ func (*server) CreateToDo(ctx context.Context, req *todopb.NewToDo) (*todopb.ToD
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-
-	//gettodo := &todopb.ToDo{}
-
-	//retrieve a single todo
-	//err2 := db.View(func(txn *badger.Txn) error {
-	//	data, err3 := txn.Get([]byte(id))
-	//	data.Value(func(val []byte) error {
-	//		err = proto.Unmarshal(val, gettodo)
-	//		if err != nil {
-	//			return err
-	//		}
-	//		return nil
-	//	})
-	//	//need to transform data in bytes
-	//	fmt.Println(gettodo)
-	//	return err3
-	//})
-	//if err2 != nil {
-	//	return nil, status.Error(codes.Internal, err2.Error())
-	//}
-
-	//todoList = append(todoList, newTodo)
-	//fmt.Println(todoList)
-
 	return res, nil
 }
 
 func (*server) ListToDos(req *todopb.Empty, stream todopb.ToDoService_ListToDosServer) error {
 	fmt.Println("ListToDos function is invoked with an empty request")
 
-	restodo := &todopb.ToDo{}
+	resTodo := &todopb.ToDo{}
 
 	err := db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -95,13 +69,13 @@ func (*server) ListToDos(req *todopb.Empty, stream todopb.ToDoService_ListToDosS
 		for it.Rewind(); it.Valid(); it.Next() {
 			data := it.Item()
 			err := data.Value(func(v []byte) error {
-				err := proto.Unmarshal(v, restodo)
+				err := proto.Unmarshal(v, resTodo)
 				res := &todopb.ToDoResponse{
 					Todo: &todopb.ToDo{
-						Id:          restodo.GetId(),
-						Title:       restodo.GetTitle(),
-						Description: restodo.GetDescription(),
-						Done:        restodo.GetDone(),
+						Id:          resTodo.GetId(),
+						Title:       resTodo.GetTitle(),
+						Description: resTodo.GetDescription(),
+						Done:        resTodo.GetDone(),
 					},
 				}
 				err = stream.Send(res)
@@ -109,9 +83,6 @@ func (*server) ListToDos(req *todopb.Empty, stream todopb.ToDoService_ListToDosS
 					return err
 				}
 				time.Sleep(500 * time.Millisecond)
-				if err != nil {
-					return err
-				}
 				return nil
 			})
 			if err != nil {
@@ -131,21 +102,47 @@ func (*server) CheckUncheck(ctx context.Context, req *todopb.ToDoId) (*todopb.To
 	fmt.Printf("CheckUncheck function is invoked with %v\n", req)
 	id := req.GetId()
 
-	for i := range todoList {
-		if id == todoList[i].GetId() {
-			todoList[i].Done = !todoList[i].GetDone()
-			res := &todopb.ToDoResponse{
-				Todo: &todopb.ToDo{
-					Id:          todoList[i].GetId(),
-					Title:       todoList[i].GetTitle(),
-					Description: todoList[i].GetDescription(),
-					Done:        todoList[i].GetDone(),
-				},
+	controlTodo := &todopb.ToDo{}
+	resTodo := &todopb.ToDo{}
+
+	err := db.Update(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 10
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			data := it.Item()
+			err := data.Value(func(v []byte) error {
+				err := proto.Unmarshal(v, controlTodo)
+				if err != nil {
+					return err
+				}
+				if controlTodo.GetId() == id {
+					resTodo = &todopb.ToDo{
+						Id:          controlTodo.GetId(),
+						Title:       controlTodo.GetTitle(),
+						Description: controlTodo.GetDescription(),
+						Done:        !controlTodo.GetDone(),
+					}
+					return nil
+				}
+				return nil
+			})
+			if err != nil {
+				return err
 			}
-			return res, nil
 		}
+		return status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", req.GetId()))
+	})
+
+	if err != nil {
+		return nil, err
 	}
-	return nil, status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", req.GetId()))
+
+	res := &todopb.ToDoResponse{
+		Todo: resTodo,
+	}
+	return res, nil
 }
 
 func (*server) DeleteToDo(ctx context.Context, req *todopb.ToDoId) (*todopb.Empty, error) {
