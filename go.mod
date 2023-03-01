@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/dgraph-io/badger/v3 v3.2103.5
+	github.com/google/uuid v1.3.0
 	golang.org/x/net v0.5.0
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1

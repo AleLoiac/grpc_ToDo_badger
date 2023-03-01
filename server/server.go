@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -12,7 +13,6 @@ import (
 	"grpc_ToDo_badger/todopb"
 	"log"
 	"net"
-	"strconv"
 	"time"
 )
 
@@ -20,15 +20,11 @@ type server struct {
 	todopb.ToDoServiceServer
 }
 
-var serial int
-
 func (*server) CreateToDo(ctx context.Context, req *todopb.NewToDo) (*todopb.ToDoResponse, error) {
 	fmt.Printf("Create function is invoked with %v\n", req)
-	id := strconv.Itoa(serial)
+	id := uuid.New().String()
 	title := req.GetTitle()
 	description := req.GetDescription()
-
-	serial++
 
 	newTodo := &todopb.ToDo{
 		Id:          id,
