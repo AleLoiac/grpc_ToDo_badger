@@ -15,7 +15,7 @@ import (
 
 func main() {
 
-	cc, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials())) //later on it will need to be secured
+	cc, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials())) //needs to be secured
 	if err != nil {
 		log.Fatalf("Could not connect: %v", err)
 	}
