@@ -132,18 +132,14 @@ func (*server) CheckUncheck(ctx context.Context, req *todopb.ToDoId) (*todopb.To
 }
 
 func (*server) DeleteToDo(ctx context.Context, req *todopb.ToDoId) (*todopb.Empty, error) {
-	fmt.Printf("DeleteToDo function is invoked with %v\n", req)
-	id := req.GetId()
+
+	fmt.Printf("DeleteProduct function is invoked with %v\n", req)
 
 	err := db.Update(func(txn *badger.Txn) error {
-		err := txn.Delete([]byte(id))
-		if err != nil {
-			return status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find todo with id: %v", id))
-		}
-		return nil
+		return txn.Delete([]byte(req.GetId()))
 	})
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("Cannot find product with id: %v", req.GetId()))
 	}
 	return &todopb.Empty{}, nil
 
